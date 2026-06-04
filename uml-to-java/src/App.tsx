@@ -74,9 +74,9 @@ export default function App() {
   const [showImport, setShowImport] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [switchMode, setSwitchMode] = useState(false);
-  const [showLanding, setShowLanding] = useState<boolean>(
-    () => localStorage.getItem('uml_visited') !== '1'
-  );
+  const [showLanding, setShowLanding] = useState<boolean>(() => {
+    try { return localStorage.getItem('uml_visited') !== '1'; } catch { return true; }
+  });
   const [langByType, setLangByType] = useState<Record<DiagramType, TargetLang>>({
     class: 'java', flowchart: 'java', er: 'oracle', sequence: 'java', activity: 'java',
   });
@@ -116,7 +116,9 @@ export default function App() {
     if (broadcastTimer.current) clearTimeout(broadcastTimer.current);
     broadcastTimer.current = setTimeout(() => broadcastState(snapshot), 400);
   }, [roomId, stashState, broadcastState]);
-  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('openai_key') ?? '');
+  const [apiKey, setApiKey] = useState<string>(() => {
+    try { return localStorage.getItem('openai_key') ?? ''; } catch { return ''; }
+  });
   const [edgeModal, setEdgeModal] = useState<{ visible: boolean; edgeId: string | null; label: string; rel: string }>({
     visible: false, edgeId: null, label: '', rel: '',
   });

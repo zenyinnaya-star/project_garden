@@ -33,11 +33,16 @@ function peerColor(id: string): string {
 
 function getOrCreateSessionId(): string {
   const KEY = 'uml_collab_session';
-  const existing = sessionStorage.getItem(KEY);
-  if (existing) return existing;
-  const id = crypto.randomUUID();
-  sessionStorage.setItem(KEY, id);
-  return id;
+  try {
+    const existing = sessionStorage.getItem(KEY);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    sessionStorage.setItem(KEY, id);
+    return id;
+  } catch {
+    // sessionStorage blocked (private mode / iframe sandbox) — use ephemeral id
+    return crypto.randomUUID();
+  }
 }
 
 /* ── hook ───────────────────────────────────────────────────────────────── */
