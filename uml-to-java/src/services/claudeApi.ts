@@ -119,6 +119,8 @@ export async function generateDiagramFromText(
     class: 'Create a complete class diagram with classes, interfaces, relationships, fields, and methods.',
     er: 'Create an ER diagram with tables and columns (use SQL types: INT, VARCHAR, DATE, etc.), primary keys, and foreign keys.',
     flowchart: 'Create a flowchart with a Start node, process steps, at least one decision diamond, and an End node.',
+    sequence: 'Create a sequence diagram with participant objects and numbered message arrows between them showing method calls and returns.',
+    activity: 'Create an activity diagram with an initial node, action steps, at least one decision fork, and a final node.',
   };
 
   const text = await callOpenAI([{

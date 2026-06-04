@@ -255,7 +255,7 @@ function renderEdges(edges: Edge[], nodeMap: Record<string, Node>): string {
     const x2 = nodeCenterX(tgt), y2 = nodeCenterY(tgt) - nodeHeight(tgt) / 2;
     const clr = (e.style?.stroke as string) ?? EDGE_CLR;
     const lbl = escape(String(e.label ?? e.data?.label ?? ''));
-    const dash = (e.style?.strokeDasharray as string) ? `stroke-dasharray="${e.style.strokeDasharray}"` : '';
+    const dash = (e.style?.strokeDasharray as string) ? `stroke-dasharray="${e.style?.strokeDasharray}"` : '';
 
     return `
     <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
@@ -270,8 +270,7 @@ function renderEdges(edges: Edge[], nodeMap: Record<string, Node>): string {
 export function generateDiagramSVG(
   nodes: Node[],
   edges: Edge[],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  diagramType: DiagramType,
+  _diagramType: DiagramType,
 ): string {
   if (nodes.length === 0) return '';
 

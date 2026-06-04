@@ -19,6 +19,8 @@ const EXAMPLES: Record<DiagramType, string> = {
   class: 'A library system with Book, Member, Loan, and Author classes. Books have titles and ISBN. Members can borrow books.',
   er: 'An e-commerce database with Products, Orders, Customers, and OrderItems tables.',
   flowchart: 'User login: enter credentials → validate → if invalid show error and retry, if valid redirect to dashboard.',
+  sequence: 'A user authentication flow: Browser sends login request to AuthService, which queries UserRepository and returns a JWT token.',
+  activity: 'Order processing: receive order → validate payment → if payment fails notify customer, if valid pick items → ship → send confirmation.',
 };
 
 export default function ImportModal({ onClose, onImport, apiKey, onNeedApiKey }: Props) {

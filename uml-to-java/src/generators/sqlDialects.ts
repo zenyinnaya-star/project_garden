@@ -117,6 +117,7 @@ export function generateDDL(nodes: Node[], edges: Edge[], dialect: SqlDialect): 
     postgresql: 'PostgreSQL 13+',
     mysql: 'MySQL 8.0+ / MariaDB 10.5+',
     sqlite: 'SQLite 3.x',
+    mssql: 'SQL Server 2019+',
   };
 
   const lines: string[] = [
