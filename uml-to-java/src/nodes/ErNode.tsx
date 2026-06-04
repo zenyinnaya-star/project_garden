@@ -7,50 +7,56 @@ export default function ErNode({ data, selected }: NodeProps) {
 
   return (
     <div style={{
-      background: '#1e293b',
-      border: `2px solid ${selected ? '#3b82f6' : '#a78bfa'}`,
-      borderRadius: 6,
-      minWidth: 180,
-      fontFamily: 'monospace',
+      background: '#080e18',
+      border: `1.5px solid ${selected ? '#f97316' : 'rgba(249,115,22,0.25)'}`,
+      borderRadius: 8,
+      minWidth: 188,
+      fontFamily: '"JetBrains Mono",monospace',
       fontSize: 12,
-      color: '#e2e8f0',
-      boxShadow: selected ? '0 0 0 1px #3b82f6' : '0 0 12px #a78bfa22',
+      color: '#e4e4e7',
+      boxShadow: selected
+        ? '0 0 0 1px #f97316, 0 0 20px rgba(249,115,22,0.25)'
+        : '0 0 18px rgba(249,115,22,0.08), 0 4px 24px rgba(0,0,0,0.6)',
     }}>
       <Handle type="target" position={Position.Top} />
       <Handle type="source" position={Position.Bottom} />
       <Handle type="target" position={Position.Left} id="left" />
       <Handle type="source" position={Position.Right} id="right" />
 
+      {/* Header */}
       <div style={{
-        background: '#2e1065',
-        padding: '6px 10px',
-        borderBottom: '1px solid #4c1d95',
+        background: 'rgba(249,115,22,0.08)',
+        padding: '7px 11px',
+        borderBottom: '1px solid rgba(249,115,22,0.2)',
         textAlign: 'center',
-        borderRadius: '4px 4px 0 0',
+        borderRadius: '6px 6px 0 0',
       }}>
-        <div style={{ fontWeight: 700, color: '#c4b5fd', fontSize: 13 }}>{d.label}</div>
+        <div style={{ fontWeight: 700, color: '#f97316', fontSize: 13, letterSpacing: 0.3 }}>
+          {d.label}
+        </div>
       </div>
 
+      {/* Attributes */}
       <div style={{ padding: '4px 0' }}>
         {d.attributes.map((attr, i) => (
           <div key={i} style={{
-            padding: '3px 10px',
+            padding: '3px 11px',
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            borderBottom: i < d.attributes.length - 1 ? '1px solid #1e1b4b' : 'none',
+            borderBottom: i < d.attributes.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
           }}>
             {attr.isPrimary && (
-              <span style={{ color: '#fbbf24', fontSize: 10, fontWeight: 700 }}>PK</span>
+              <span style={{ color: '#fbbf24', fontSize: 9, fontWeight: 700, letterSpacing: 0.3 }}>PK</span>
             )}
             {attr.isForeign && (
-              <span style={{ color: '#6ee7b7', fontSize: 10, fontWeight: 700 }}>FK</span>
+              <span style={{ color: '#6ee7b7', fontSize: 9, fontWeight: 700, letterSpacing: 0.3 }}>FK</span>
             )}
             {!attr.isPrimary && !attr.isForeign && (
-              <span style={{ color: '#475569', fontSize: 10 }}>  </span>
+              <span style={{ width: 16 }} />
             )}
-            <span style={{ color: '#e2e8f0' }}>{attr.name}</span>
-            <span style={{ color: '#64748b', marginLeft: 'auto' }}>{attr.type}</span>
+            <span style={{ color: '#e4e4e7' }}>{attr.name}</span>
+            <span style={{ color: '#a78bfa', marginLeft: 'auto' }}>{attr.type}</span>
           </div>
         ))}
       </div>

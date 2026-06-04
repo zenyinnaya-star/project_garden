@@ -1,7 +1,7 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { ErNodeData } from '../types';
 
-export type SqlDialect = 'oracle' | 'postgresql' | 'mysql' | 'sqlite';
+export type SqlDialect = 'oracle' | 'postgresql' | 'mysql' | 'sqlite' | 'mssql';
 
 /* ── type maps per dialect ─────────────────────────────────────── */
 type TMap = Record<string, string>;
@@ -51,7 +51,19 @@ const SQLITE: TMap = {
   NUMBER:'NUMERIC',
 };
 
-const MAPS: Record<SqlDialect, TMap> = { oracle: ORACLE, postgresql: PG, mysql: MYSQL, sqlite: SQLITE };
+const MSSQL: TMap = {
+  INT:'INT', INTEGER:'INT', BIGINT:'BIGINT', SMALLINT:'SMALLINT',
+  TINYINT:'TINYINT', SERIAL:'INT', BIGSERIAL:'BIGINT',
+  VARCHAR:'VARCHAR(255)', VARCHAR2:'VARCHAR(255)', CHAR:'CHAR(10)',
+  TEXT:'NVARCHAR(MAX)', LONGTEXT:'NVARCHAR(MAX)', MEDIUMTEXT:'NVARCHAR(MAX)', BOOLEAN:'BIT',
+  BOOL:'BIT', FLOAT:'FLOAT', DOUBLE:'FLOAT',
+  DECIMAL:'DECIMAL(18,2)', NUMERIC:'NUMERIC(18,2)', MONEY:'MONEY',
+  DATE:'DATE', DATETIME:'DATETIME2', TIMESTAMP:'DATETIME2', TIME:'TIME',
+  BLOB:'VARBINARY(MAX)', CLOB:'NVARCHAR(MAX)', JSON:'NVARCHAR(MAX)', UUID:'UNIQUEIDENTIFIER', BYTEA:'VARBINARY(MAX)',
+  NUMBER:'NUMERIC',
+};
+
+const MAPS: Record<SqlDialect, TMap> = { oracle: ORACLE, postgresql: PG, mysql: MYSQL, sqlite: SQLITE, mssql: MSSQL };
 
 function mapType(raw: string, dialect: SqlDialect): string {
   const base = raw.toUpperCase().split('(')[0].trim();
@@ -76,6 +88,7 @@ function pad(s: string, n: number) { return s + ' '.repeat(Math.max(0, n - s.len
 function q(name: string, dialect: SqlDialect): string {
   if (dialect === 'mysql') return `\`${name}\``;
   if (dialect === 'sqlite') return `"${name}"`;
+  if (dialect === 'mssql') return `[${name}]`;
   return name.toUpperCase();
 }
 
@@ -85,6 +98,7 @@ function identity(col: string, dialect: SqlDialect): string {
     case 'postgresql': return `${col}GENERATED ALWAYS AS IDENTITY`;
     case 'mysql':      return `${col}AUTO_INCREMENT`;
     case 'sqlite':     return `${col}AUTOINCREMENT`;
+    case 'mssql':      return `${col}IDENTITY(1,1)`;
   }
 }
 

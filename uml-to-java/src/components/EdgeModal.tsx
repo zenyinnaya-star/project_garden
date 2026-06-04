@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { DiagramType } from '../types';
 
 interface Props {
@@ -30,13 +31,23 @@ const relationships: Record<DiagramType, { value: string; label: string }[]> = {
     { value: 'ManyToOne', label: 'Many-to-One' },
     { value: 'ManyToMany', label: 'Many-to-Many' },
   ],
+  sequence: [
+    { value: 'association', label: 'Message' },
+    { value: 'return', label: 'Return' },
+    { value: 'async', label: 'Async' },
+  ],
+  activity: [
+    { value: 'association', label: 'Transition' },
+    { value: 'guard', label: 'Guard' },
+  ],
 };
 
 export default function EdgeModal({ visible, edgeId, currentLabel, currentRelationship, diagramType, onSave, onClose }: Props) {
-  if (!visible || !edgeId) return null;
+  const defaultRel = currentRelationship || relationships[diagramType]?.[0]?.value || '';
+  const [label, setLabel] = useState(currentLabel);
+  const [rel, setRel] = useState(defaultRel);
 
-  let label = currentLabel;
-  let rel = currentRelationship || relationships[diagramType][0]?.value || '';
+  if (!visible || !edgeId) return null;
 
   return (
     <div style={{
@@ -65,8 +76,8 @@ export default function EdgeModal({ visible, edgeId, currentLabel, currentRelati
               background: '#0f172a', border: '1px solid #334155', borderRadius: 4,
               color: '#e2e8f0', padding: '6px 8px', fontSize: 12, width: '100%', outline: 'none',
             }}
-            defaultValue={currentLabel}
-            onChange={e => { label = e.target.value; }}
+            value={label}
+            onChange={e => setLabel(e.target.value)}
             placeholder="e.g. login(user)"
           />
         </div>
@@ -78,10 +89,10 @@ export default function EdgeModal({ visible, edgeId, currentLabel, currentRelati
               background: '#0f172a', border: '1px solid #334155', borderRadius: 4,
               color: '#e2e8f0', padding: '6px 8px', fontSize: 12, width: '100%', outline: 'none', cursor: 'pointer',
             }}
-            defaultValue={currentRelationship || relationships[diagramType][0]?.value}
-            onChange={e => { rel = e.target.value; }}
+            value={rel}
+            onChange={e => setRel(e.target.value)}
           >
-            {relationships[diagramType].map(r => (
+            {(relationships[diagramType] ?? relationships.class).map(r => (
               <option key={r.value} value={r.value}>{r.label}</option>
             ))}
           </select>

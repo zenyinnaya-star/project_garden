@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react';
-import type { ClassNodeData, SequenceNodeData, FlowNodeData, ErNodeData } from '../types';
+import type { ClassNodeData, SequenceNodeData, FlowNodeData, ErNodeData, ActivityNodeData } from '../types';
 import { XIcon } from './Icons';
 
 interface Props {
@@ -10,17 +10,17 @@ interface Props {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>{label}</div>
+      <div style={{ color: '#52525b', fontSize: 11, marginBottom: 4 }}>{label}</div>
       {children}
     </div>
   );
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#0f172a',
-  border: '1px solid #334155',
+  background: '#000000',
+  border: '1px solid rgba(255,255,255,0.1)',
   borderRadius: 4,
-  color: '#e2e8f0',
+  color: '#e4e4e7',
   padding: '4px 8px',
   fontSize: 12,
   width: '100%',
@@ -33,10 +33,10 @@ const selectStyle: React.CSSProperties = {
 };
 
 const btnStyle: React.CSSProperties = {
-  background: '#1e3a5f',
-  border: '1px solid #334155',
+  background: 'rgba(249,115,22,0.08)',
+  border: '1px solid rgba(249,115,22,0.2)',
   borderRadius: 4,
-  color: '#60a5fa',
+  color: '#f97316',
   padding: '4px 10px',
   fontSize: 11,
   cursor: 'pointer',
@@ -48,13 +48,13 @@ export default function PropertiesPanel({ node, onUpdate }: Props) {
     return (
       <div style={{
         width: 36,
-        background: '#0f172a',
-        borderLeft: '1px solid #1e293b',
+        background: '#050a12',
+        borderLeft: '1px solid rgba(255,255,255,0.06)',
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'center',
         paddingTop: 12,
-        color: '#334155',
+        color: '#27272a',
         fontSize: 10,
         writingMode: 'vertical-rl',
         letterSpacing: 1,
@@ -73,8 +73,8 @@ export default function PropertiesPanel({ node, onUpdate }: Props) {
   if (node.type === 'classNode') {
     const d = node.data as unknown as ClassNodeData;
     return (
-      <div style={{ width: 220, background: '#0f172a', borderLeft: '1px solid #1e293b', padding: 16, overflowY: 'auto', fontSize: 12 }}>
-        <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+      <div style={{ width: 220, background: '#050a12', borderLeft: '1px solid rgba(255,255,255,0.08)', padding: 16, overflowY: 'auto', fontSize: 12 }}>
+        <div style={{ color: '#52525b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
           Class Properties
         </div>
 
@@ -89,9 +89,9 @@ export default function PropertiesPanel({ node, onUpdate }: Props) {
           </select>
         </Field>
 
-        <div style={{ color: '#64748b', fontSize: 11, marginTop: 12, marginBottom: 6 }}>Fields</div>
+        <div style={{ color: '#52525b', fontSize: 11, marginTop: 12, marginBottom: 6 }}>Fields</div>
         {d.fields.map((f, i) => (
-          <div key={i} style={{ background: '#1e293b', borderRadius: 4, padding: '6px 8px', marginBottom: 6 }}>
+          <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4, padding: '6px 8px', marginBottom: 6 }}>
             <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
               <input
                 style={{ ...inputStyle, flex: 1 }}
@@ -139,9 +139,9 @@ export default function PropertiesPanel({ node, onUpdate }: Props) {
           + Add Field
         </button>
 
-        <div style={{ color: '#64748b', fontSize: 11, marginTop: 12, marginBottom: 6 }}>Methods</div>
+        <div style={{ color: '#52525b', fontSize: 11, marginTop: 12, marginBottom: 6 }}>Methods</div>
         {d.methods.map((m, i) => (
-          <div key={i} style={{ background: '#1e293b', borderRadius: 4, padding: '6px 8px', marginBottom: 6 }}>
+          <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4, padding: '6px 8px', marginBottom: 6 }}>
             <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
               <input
                 style={{ ...inputStyle, flex: 1 }}
@@ -206,8 +206,8 @@ export default function PropertiesPanel({ node, onUpdate }: Props) {
   if (node.type === 'sequenceNode') {
     const d = node.data as unknown as SequenceNodeData;
     return (
-      <div style={{ width: 220, background: '#0f172a', borderLeft: '1px solid #1e293b', padding: 16, fontSize: 12 }}>
-        <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+      <div style={{ width: 220, background: '#050a12', borderLeft: '1px solid rgba(255,255,255,0.08)', padding: 16, fontSize: 12 }}>
+        <div style={{ color: '#52525b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
           Participant
         </div>
         <Field label="Name">
@@ -229,8 +229,8 @@ export default function PropertiesPanel({ node, onUpdate }: Props) {
   if (node.type === 'flowNode') {
     const d = node.data as unknown as FlowNodeData;
     return (
-      <div style={{ width: 220, background: '#0f172a', borderLeft: '1px solid #1e293b', padding: 16, fontSize: 12 }}>
-        <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+      <div style={{ width: 220, background: '#050a12', borderLeft: '1px solid rgba(255,255,255,0.08)', padding: 16, fontSize: 12 }}>
+        <div style={{ color: '#52525b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
           Flow Step
         </div>
         <Field label="Label">
@@ -253,17 +253,17 @@ export default function PropertiesPanel({ node, onUpdate }: Props) {
   if (node.type === 'erNode') {
     const d = node.data as unknown as ErNodeData;
     return (
-      <div style={{ width: 220, background: '#0f172a', borderLeft: '1px solid #1e293b', padding: 16, overflowY: 'auto', fontSize: 12 }}>
-        <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+      <div style={{ width: 220, background: '#050a12', borderLeft: '1px solid rgba(255,255,255,0.08)', padding: 16, overflowY: 'auto', fontSize: 12 }}>
+        <div style={{ color: '#52525b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
           Entity
         </div>
         <Field label="Table Name">
           <input style={inputStyle} value={d.label} onChange={e => update({ label: e.target.value })} />
         </Field>
 
-        <div style={{ color: '#64748b', fontSize: 11, marginTop: 12, marginBottom: 6 }}>Attributes</div>
+        <div style={{ color: '#52525b', fontSize: 11, marginTop: 12, marginBottom: 6 }}>Attributes</div>
         {d.attributes.map((attr, i) => (
-          <div key={i} style={{ background: '#1e293b', borderRadius: 4, padding: '6px 8px', marginBottom: 6 }}>
+          <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4, padding: '6px 8px', marginBottom: 6 }}>
             <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
               <input
                 style={{ ...inputStyle, flex: 1 }}
@@ -313,6 +313,35 @@ export default function PropertiesPanel({ node, onUpdate }: Props) {
         <button style={btnStyle} onClick={() => update({ attributes: [...d.attributes, { name: 'column', type: 'VARCHAR' }] })}>
           + Add Attribute
         </button>
+      </div>
+    );
+  }
+
+  // --- ACTIVITY NODE ---
+  if (node.type === 'activityNode') {
+    const d = node.data as unknown as ActivityNodeData;
+    const noLabel = d.type === 'initial' || d.type === 'final' || d.type === 'fork' || d.type === 'join';
+    return (
+      <div style={{ width: 220, background: '#050a12', borderLeft: '1px solid rgba(255,255,255,0.08)', padding: 16, fontSize: 12 }}>
+        <div style={{ color: '#52525b', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+          Activity Node
+        </div>
+        <Field label="Type">
+          <select style={selectStyle} value={d.type} onChange={e => update({ type: e.target.value })}>
+            <option value="initial">● Initial</option>
+            <option value="action">▶ Action</option>
+            <option value="decision">◇ Decision</option>
+            <option value="fork">━ Fork</option>
+            <option value="join">━ Join</option>
+            <option value="merge">◇ Merge</option>
+            <option value="final">◉ Final</option>
+          </select>
+        </Field>
+        {!noLabel && (
+          <Field label="Label">
+            <input style={inputStyle} value={d.label || ''} onChange={e => update({ label: e.target.value })} />
+          </Field>
+        )}
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   addEdge,
@@ -16,6 +16,8 @@ import '@xyflow/react/dist/style.css';
 import ClassNode from './nodes/ClassNode';
 import FlowNode from './nodes/FlowNode';
 import ErNode from './nodes/ErNode';
+import SequenceNode from './nodes/SequenceNode';
+import ActivityNode from './nodes/ActivityNode';
 import Palette from './components/Palette';
 import PropertiesPanel from './components/PropertiesPanel';
 import CodeOutput from './components/CodeOutput';
@@ -23,24 +25,40 @@ import EdgeModal from './components/EdgeModal';
 import ImportModal from './components/ImportModal';
 import ApiKeyModal from './components/ApiKeyModal';
 import LandingModal from './components/LandingModal';
+import TutorialOverlay from './components/TutorialOverlay';
+import AuthModal    from './components/AuthModal';
+import UserMenu     from './components/UserMenu';
+import ShareModal   from './components/ShareModal';
 import CodeDropPanel from './components/CodeDropPanel';
 import EmptyCanvas from './components/EmptyCanvas';
-import type { DiagramType } from './types';
-import { KeyIcon, UploadIcon, XIcon, PlayIcon, DiagramIcon } from './components/Icons';
-import { generateClassCode } from './generators/classGenerator';
+import type { DiagramType, TargetLang } from './types';
+import type { OopLang } from './types';
+import type { SqlDialect } from './generators/sqlDialects';
+import { KeyIcon, UploadIcon, XIcon, PlayIcon } from './components/Icons';
+import { useAuth }  from './hooks/useAuth';
+import { useCollab } from './hooks/useCollab';
+import type { CollabSnapshot } from './hooks/useCollab';
+import { generateClassCodeForLang } from './generators/multiLangClassGenerator';
 import { generateFlowCode } from './generators/flowGenerator';
-import { generateOracleDDL } from './generators/oracleGenerator';
+import { generateDDL } from './generators/sqlDialects';
+import { generateSequenceCode } from './generators/sequenceGenerator';
+import { generateActivityCode } from './generators/activityGenerator';
+import LanguagePicker from './components/LanguagePicker';
 
 const nodeTypes = {
-  classNode: ClassNode,
-  flowNode: FlowNode,
-  erNode: ErNode,
+  classNode:    ClassNode,
+  flowNode:     FlowNode,
+  erNode:       ErNode,
+  sequenceNode: SequenceNode,
+  activityNode: ActivityNode,
 };
 
 const DIAGRAM_TABS: { id: DiagramType; label: string }[] = [
-  { id: 'class', label: 'Class' },
+  { id: 'class',     label: 'Class'     },
   { id: 'flowchart', label: 'Flowchart' },
-  { id: 'er', label: 'ER' },
+  { id: 'er',        label: 'ER'        },
+  { id: 'sequence',  label: 'Sequence'  },
+  { id: 'activity',  label: 'Activity'  },
 ];
 
 let nodeIdCounter = 1;
@@ -59,6 +77,45 @@ export default function App() {
   const [showLanding, setShowLanding] = useState<boolean>(
     () => localStorage.getItem('uml_visited') !== '1'
   );
+  const [langByType, setLangByType] = useState<Record<DiagramType, TargetLang>>({
+    class: 'java', flowchart: 'java', er: 'oracle', sequence: 'java', activity: 'java',
+  });
+
+  /* ── Auth ── */
+  const { user, loading: authLoading, signOut } = useAuth();
+  const [showAuth,  setShowAuth]  = useState(false);
+  const [showShare, setShowShare] = useState(false);
+
+  /* ── Collaboration room (from URL or created on Share click) ── */
+  const [roomId, setRoomId] = useState<string | null>(() => {
+    return new URLSearchParams(window.location.search).get('room');
+  });
+
+  // Stable guest name — generated once, won't change on re-renders
+  const [guestName] = useState(() => `Guest-${Math.random().toString(36).slice(2, 6)}`);
+  const displayName = user?.email ? user.email.split('@')[0] : guestName;
+
+  /* Remote update handler — apply incoming state from collaborators */
+  const handleRemoteUpdate = useCallback((snapshot: CollabSnapshot) => {
+    setNodes(snapshot.nodes);
+    setEdges(snapshot.edges);
+    setDiagramType(snapshot.diagramType);
+  }, [setNodes, setEdges]);
+
+  const { peers, isConnected, myColor, broadcastState, stashState } = useCollab(
+    roomId,
+    displayName,
+    handleRemoteUpdate,
+  );
+
+  /* Debounced broadcast — fires 400ms after the last change */
+  const broadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleBroadcast = useCallback((snapshot: CollabSnapshot) => {
+    stashState(snapshot);
+    if (!roomId) return;
+    if (broadcastTimer.current) clearTimeout(broadcastTimer.current);
+    broadcastTimer.current = setTimeout(() => broadcastState(snapshot), 400);
+  }, [roomId, stashState, broadcastState]);
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('openai_key') ?? '');
   const [edgeModal, setEdgeModal] = useState<{ visible: boolean; edgeId: string | null; label: string; rel: string }>({
     visible: false, edgeId: null, label: '', rel: '',
@@ -72,8 +129,8 @@ export default function App() {
       const edge: Edge = {
         ...params,
         id: `edge_${Date.now()}`,
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
-        style: { stroke: '#64748b', strokeWidth: 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#3f3f46' },
+        style: { stroke: '#3f3f46', strokeWidth: 1.5 },
         data: { relationship: 'association', label: '' },
       };
       setEdges(eds => addEdge(edge, eds));
@@ -103,7 +160,7 @@ export default function App() {
                   relationship === 'extends' ? '#c084fc' :
                   relationship === 'implements' ? '#60a5fa' :
                   relationship === 'composition' ? '#f87171' :
-                  relationship === 'aggregation' ? '#fbbf24' : '#64748b',
+                  relationship === 'aggregation' ? '#fbbf24' : '#3f3f46',
                 strokeWidth: 1.5,
                 strokeDasharray: relationship === 'dependency' ? '5,5' : undefined,
               },
@@ -174,9 +231,11 @@ export default function App() {
     if (!rfInstance) return;
     const position = rfInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
     const defaults: Partial<Record<DiagramType, { nodeType: string; data: object }>> = {
-      class:     { nodeType: 'classNode', data: { label: 'NewClass', type: 'class', fields: [], methods: [] } },
-      flowchart: { nodeType: 'flowNode',  data: { label: 'Step', type: 'process' } },
-      er:        { nodeType: 'erNode',    data: { label: 'NewTable', attributes: [{ name: 'id', type: 'INT', isPrimary: true }] } },
+      class:     { nodeType: 'classNode',    data: { label: 'NewClass', type: 'class', fields: [], methods: [] } },
+      flowchart: { nodeType: 'flowNode',     data: { label: 'Step', type: 'process' } },
+      er:        { nodeType: 'erNode',       data: { label: 'NewTable', attributes: [{ name: 'id', type: 'INT', isPrimary: true }] } },
+      sequence:  { nodeType: 'sequenceNode', data: { label: 'Participant', type: 'object' } },
+      activity:  { nodeType: 'activityNode', data: { label: 'Action', type: 'action' } },
     };
     const def = defaults[diagramType];
     if (!def) return;
@@ -188,11 +247,21 @@ export default function App() {
     setSelectedNode(prev => prev?.id === id ? { ...prev, data } : prev);
   }, [setNodes]);
 
+  /* Broadcast diagram state to collaborators on every meaningful change */
+  useEffect(() => {
+    scheduleBroadcast({ nodes, edges, diagramType });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges, diagramType]);
+
+  const currentLang = langByType[diagramType];
+
   const handleGenerate = () => {
     let code = '';
-    if (diagramType === 'class') code = generateClassCode(nodes, edges);
-    else if (diagramType === 'flowchart') code = generateFlowCode(nodes, edges);
-    else if (diagramType === 'er') code = generateOracleDDL(nodes, edges);
+    if      (diagramType === 'class')     code = generateClassCodeForLang(nodes, edges, currentLang as OopLang);
+    else if (diagramType === 'flowchart') code = generateFlowCode(nodes, edges, currentLang as OopLang);
+    else if (diagramType === 'er')        code = generateDDL(nodes, edges, currentLang as SqlDialect);
+    else if (diagramType === 'sequence')  code = generateSequenceCode(nodes, edges, currentLang as OopLang);
+    else if (diagramType === 'activity')  code = generateActivityCode(nodes, edges, currentLang as OopLang);
     setGeneratedCode(code || '// Nothing to generate yet.');
     setShowCode(true);
   };
@@ -204,19 +273,50 @@ export default function App() {
     setSelectedNode(null);
     setGeneratedCode('');
     setShowCode(false);
-    // Auto-generate code right after import
+    // Auto-generate code right after import using the per-type language
     setTimeout(() => {
+      const lang = langByType[type];
       let code = '';
-      if (type === 'class') code = generateClassCode(importedNodes, importedEdges);
-      else if (type === 'flowchart') code = generateFlowCode(importedNodes, importedEdges);
-      else if (type === 'er') code = generateOracleDDL(importedNodes, importedEdges);
+      if      (type === 'class')     code = generateClassCodeForLang(importedNodes, importedEdges, lang as OopLang);
+      else if (type === 'flowchart') code = generateFlowCode(importedNodes, importedEdges, lang as OopLang);
+      else if (type === 'er')        code = generateDDL(importedNodes, importedEdges, lang as SqlDialect);
+      else if (type === 'sequence')  code = generateSequenceCode(importedNodes, importedEdges, lang as OopLang);
+      else if (type === 'activity')  code = generateActivityCode(importedNodes, importedEdges, lang as OopLang);
       if (code) { setGeneratedCode(code); setShowCode(true); }
     }, 100);
   };
 
+  const handleShare = () => {
+    if (!roomId) {
+      const newRoom = crypto.randomUUID();
+      setRoomId(newRoom);
+      const url = new URL(window.location.href);
+      url.searchParams.set('room', newRoom);
+      window.history.replaceState(null, '', url.toString());
+    }
+    setShowShare(true);
+  };
+
+  const handleStopSharing = () => {
+    setRoomId(null);
+    setShowShare(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    window.history.replaceState(null, '', url.toString());
+  };
+
+  /* ── Tutorial ── */
+  const [showTutorial, setShowTutorial] = useState(false);
+
   const handleDismissLanding = () => {
     localStorage.setItem('uml_visited', '1');
     setShowLanding(false);
+  };
+
+  const handleStartTutorial = () => {
+    handleDismissLanding();
+    // Small delay so the landing modal finishes unmounting before the tutorial starts
+    setTimeout(() => setShowTutorial(true), 80);
   };
 
   const saveApiKey = (key: string) => {
@@ -251,33 +351,33 @@ export default function App() {
 
   /* ── theme tokens ── */
   const T = switchMode ? {
-    appBg:      '#f8f8f8',
-    barBg:      '#dc2626',
-    barBorder:  '#b91c1c',
-    barText:    '#fff',
-    tabsBg:     'rgba(0,0,0,0.15)',
-    tabActive:  '#fff',
-    tabActiveTx:'#dc2626',
-    tabIdle:    'rgba(255,255,255,0.75)',
-    btnBorder:  'rgba(255,255,255,0.35)',
-    btnBg:      'rgba(255,255,255,0.12)',
-    btnText:    '#fff',
-    genBg:      '#fff',
-    genTx:      '#dc2626',
+    appBg:      '#000000',
+    barBg:      '#020c1a',
+    barBorder:  'rgba(14,165,233,0.3)',
+    barText:    '#e0f2fe',
+    tabsBg:     'rgba(14,165,233,0.06)',
+    tabActive:  '#0ea5e9',
+    tabActiveTx:'#000000',
+    tabIdle:    '#475569',
+    btnBorder:  'rgba(14,165,233,0.25)',
+    btnBg:      'rgba(14,165,233,0.08)',
+    btnText:    '#7dd3fc',
+    genBg:      'linear-gradient(135deg,#0ea5e9,#0284c7)',
+    genTx:      '#ffffff',
   } : {
-    appBg:      '#0f172a',
-    barBg:      '#0f172a',
-    barBorder:  '#1e293b',
-    barText:    '#f1f5f9',
-    tabsBg:     '#1e293b',
-    tabActive:  '#1d4ed8',
-    tabActiveTx:'#fff',
-    tabIdle:    '#94a3b8',
-    btnBorder:  '#334155',
-    btnBg:      '#1e293b',
-    btnText:    '#94a3b8',
-    genBg:      '#1d4ed8',
-    genTx:      '#fff',
+    appBg:      '#000000',
+    barBg:      '#000000',
+    barBorder:  'rgba(255,255,255,0.08)',
+    barText:    '#ffffff',
+    tabsBg:     'rgba(255,255,255,0.05)',
+    tabActive:  '#f97316',
+    tabActiveTx:'#ffffff',
+    tabIdle:    '#52525b',
+    btnBorder:  'rgba(255,255,255,0.1)',
+    btnBg:      'rgba(255,255,255,0.04)',
+    btnText:    '#71717a',
+    genBg:      'linear-gradient(135deg,#f97316,#ea580c)',
+    genTx:      '#ffffff',
   };
 
   return (
@@ -294,21 +394,28 @@ export default function App() {
         flexShrink: 0,
         transition: 'background 0.2s',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 8 }}>
+        <div
+          onClick={() => setShowLanding(true)}
+          title="Back to home"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 8, cursor: 'pointer', userSelect: 'none' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = '0.75'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = '1'; }}
+        >
           <div style={{
             width: 30, height: 30,
-            background: switchMode ? '#fff' : '#1d4ed8',
+            background: switchMode ? 'rgba(14,165,233,0.15)' : 'linear-gradient(135deg,#f97316,#ea580c)',
             borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16, fontWeight: 700,
-            color: switchMode ? '#dc2626' : '#fff',
+            color: switchMode ? '#38bdf8' : '#ffffff',
+            boxShadow: switchMode ? '0 0 12px rgba(14,165,233,0.3)' : '0 0 12px rgba(249,115,22,0.4)',
             transition: 'all 0.2s',
           }}>U</div>
           <span style={{ color: T.barText, fontWeight: 600, fontSize: 15, transition: 'color 0.2s' }}>
-            UML<span style={{ color: switchMode ? '#fecaca' : '#3b82f6' }}>→Java</span>
+            UML<span style={{ color: switchMode ? '#38bdf8' : '#f97316' }}>→Code</span>
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: 4, background: T.tabsBg, borderRadius: 6, padding: 3 }}>
+        <div data-tutorial="diagram-tabs" style={{ display: 'flex', gap: 4, background: T.tabsBg, borderRadius: 6, padding: 3 }}>
           {DIAGRAM_TABS.map(tab => (
             <button
               key={tab.id}
@@ -330,87 +437,206 @@ export default function App() {
           ))}
         </div>
 
-        {/* ── right-side actions — all flex-shrink:0 so they never wrap off screen ── */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
+        {/* ── Language picker ── */}
+        {!switchMode && (
+          <LanguagePicker
+            diagramType={diagramType}
+            lang={currentLang}
+            onChange={lang => setLangByType(prev => ({ ...prev, [diagramType]: lang }))}
+          />
+        )}
 
-          {/* Pro badge — icon only, tooltip explains */}
-          <div
-            title="Professional Mode coming soon — team workspaces, version history, CI/CD hooks & cloud sync"
-            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 6, padding: '4px 8px', cursor: 'default', userSelect: 'none', flexShrink: 0 }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-            </svg>
-            <span style={{ fontSize: 9, fontWeight: 800, color: '#a78bfa', letterSpacing: 0.5 }}>PRO</span>
-            <span style={{ fontSize: 8, fontWeight: 800, color: '#7c3aed', background: 'rgba(124,58,237,0.2)', padding: '1px 4px', borderRadius: 4 }}>SOON</span>
+        {/* ════════════════════════════════════════════════════════
+            RIGHT-SIDE ACTIONS  (3 logical groups + primary CTA)
+            ════════════════════════════════════════════════════════ */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+
+          {/* ── GROUP A: Account & Collaboration ─────────────────── */}
+
+          {/* Sign In / User avatar */}
+          {!authLoading && (
+            user ? (
+              <UserMenu user={user} onSignOut={signOut} />
+            ) : (
+              <button
+                onClick={() => setShowAuth(true)}
+                title="Sign in to save diagrams and collaborate"
+                style={{
+                  background: T.btnBg, border: `1px solid ${T.btnBorder}`,
+                  borderRadius: 6, color: T.btnText,
+                  padding: '5px 10px', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                  flexShrink: 0, transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(249,115,22,0.5)'; e.currentTarget.style.color = '#f97316'; e.currentTarget.style.background = 'rgba(249,115,22,0.07)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = T.btnBorder; e.currentTarget.style.color = T.btnText; e.currentTarget.style.background = T.btnBg; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="8" r="4"/>
+                  <path d="M20 21a8 8 0 10-16 0"/>
+                </svg>
+                Sign In
+              </button>
+            )
+          )}
+
+          {/* Share + Live peer avatars (grouped together) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+            {/* Stacked peer avatars — appear when collaborators are present */}
+            {roomId && peers.length > 0 && (
+              <div style={{ display: 'flex', marginRight: 2 }}>
+                {peers.slice(0, 3).map((p, i) => (
+                  <div key={p.sessionId} title={p.displayName} style={{
+                    width: 22, height: 22, borderRadius: '50%',
+                    background: p.color + '25', border: `1.5px solid ${p.color}66`,
+                    color: p.color, fontSize: 9, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    marginLeft: i > 0 ? -7 : 0, zIndex: 10 - i, position: 'relative',
+                    boxShadow: '0 0 0 1.5px #000',
+                  }}>
+                    {p.displayName.slice(0, 2).toUpperCase()}
+                  </div>
+                ))}
+                {peers.length > 3 && (
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.15)', color: '#71717a', fontSize: 8, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: -7, zIndex: 6, position: 'relative', boxShadow: '0 0 0 1.5px #000' }}>
+                    +{peers.length - 3}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={handleShare}
+              title={roomId ? 'Collaboration active — click to manage' : 'Share & collaborate in real time'}
+              style={{
+                background: roomId ? (isConnected ? 'rgba(16,185,129,0.12)' : 'rgba(249,115,22,0.1)') : T.btnBg,
+                border: `1px solid ${roomId ? (isConnected ? 'rgba(16,185,129,0.45)' : 'rgba(249,115,22,0.4)') : T.btnBorder}`,
+                borderRadius: 6,
+                color: roomId ? (isConnected ? '#10b981' : '#f97316') : T.btnText,
+                padding: '5px 10px', fontSize: 11, fontWeight: roomId ? 700 : 500,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                transition: 'all 0.2s',
+                boxShadow: roomId && isConnected ? '0 0 8px rgba(16,185,129,0.25)' : 'none',
+              }}
+              onMouseEnter={e => { if (!roomId) { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.4)'; e.currentTarget.style.color = '#10b981'; e.currentTarget.style.background = 'rgba(16,185,129,0.07)'; }}}
+              onMouseLeave={e => { if (!roomId) { e.currentTarget.style.borderColor = T.btnBorder; e.currentTarget.style.color = T.btnText; e.currentTarget.style.background = T.btnBg; }}}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              {roomId ? (isConnected ? '● Live' : 'Connecting…') : 'Share'}
+            </button>
           </div>
 
-          {/* Switch Mode (Code Import) */}
-          <button
-            onClick={() => setSwitchMode(s => !s)}
-            title={switchMode ? 'Exit Code Import mode' : 'Code Import — drop Java or Oracle DDL to generate diagrams'}
-            style={{
-              background: switchMode ? '#fff' : '#7f1d1d',
-              border: `1px solid ${switchMode ? '#fca5a5' : '#991b1b'}`,
-              borderRadius: 6, color: switchMode ? '#dc2626' : '#fca5a5',
-              padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-              transition: 'all 0.2s',
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
-              <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
-            </svg>
-            {switchMode ? 'Exit' : 'Code Import'}
-          </button>
+          {/* ── DIVIDER ── */}
+          <div style={{ width: 1, height: 20, background: T.btnBorder, margin: '0 6px', flexShrink: 0, opacity: 0.7 }} />
 
-          {/* API key — icon only */}
-          <button
-            onClick={() => setShowApiKey(true)}
-            title={apiKey ? 'API key set — click to change' : 'Set OpenAI API key for AI features'}
-            style={{ background: T.btnBg, border: `1px solid ${apiKey ? (switchMode ? 'rgba(255,255,255,0.5)' : '#166534') : T.btnBorder}`, borderRadius: 6, color: apiKey ? (switchMode ? '#fff' : '#4ade80') : T.btnText, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
-          >
-            <KeyIcon size={12} />
-            <span style={{ fontSize: 10 }}>{apiKey ? '' : 'API Key'}</span>
-          </button>
+          {/* ── GROUP B: Tools ───────────────────────────────────── */}
 
-          {/* Import */}
+          {/* Import diagram / AI import */}
           {!switchMode && (
             <button
               onClick={() => setShowImport(true)}
-              style={{ background: T.btnBg, border: `1px solid ${T.btnBorder}`, borderRadius: 6, color: T.btnText, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}
+              title="Import existing code or diagram"
+              style={{ background: T.btnBg, border: `1px solid ${T.btnBorder}`, borderRadius: 6, color: T.btnText, padding: '5px 9px', fontSize: 11, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, transition: 'all 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)'; e.currentTarget.style.color = '#e4e4e7'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = T.btnBorder; e.currentTarget.style.color = T.btnText; }}
             >
-              <UploadIcon size={12} /> Import
+              <UploadIcon size={11} /> Import
             </button>
           )}
 
-          {/* Hide code */}
+          {/* API Key */}
+          <button
+            onClick={() => setShowApiKey(true)}
+            title={apiKey ? 'OpenAI API key set — click to change' : 'Set OpenAI API key for AI import'}
+            style={{
+              background: apiKey ? (switchMode ? 'rgba(14,165,233,0.08)' : 'rgba(249,115,22,0.08)') : T.btnBg,
+              border: `1px solid ${apiKey ? (switchMode ? 'rgba(14,165,233,0.4)' : 'rgba(249,115,22,0.35)') : T.btnBorder}`,
+              borderRadius: 6,
+              color: apiKey ? (switchMode ? '#38bdf8' : '#f97316') : T.btnText,
+              padding: '5px 8px', fontSize: 11, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (!apiKey) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)'; e.currentTarget.style.color = '#e4e4e7'; }}}
+            onMouseLeave={e => { if (!apiKey) { e.currentTarget.style.borderColor = T.btnBorder; e.currentTarget.style.color = T.btnText; }}}
+          >
+            <KeyIcon size={12} />
+            {!apiKey && <span style={{ fontSize: 10 }}>AI Key</span>}
+          </button>
+
+          {/* Code Import mode toggle */}
+          <button
+            onClick={() => setSwitchMode(s => !s)}
+            title={switchMode ? 'Exit Code Import mode' : 'Code Import — paste code to reverse-engineer a diagram'}
+            style={{
+              background: switchMode ? 'rgba(14,165,233,0.18)' : 'rgba(14,165,233,0.06)',
+              border: `1px solid ${switchMode ? 'rgba(14,165,233,0.6)' : 'rgba(14,165,233,0.22)'}`,
+              borderRadius: 6, color: switchMode ? '#38bdf8' : '#7dd3fc',
+              padding: '5px 9px', fontSize: 11, fontWeight: switchMode ? 700 : 500,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { if (!switchMode) { e.currentTarget.style.borderColor = 'rgba(14,165,233,0.45)'; e.currentTarget.style.color = '#38bdf8'; }}}
+            onMouseLeave={e => { if (!switchMode) { e.currentTarget.style.borderColor = 'rgba(14,165,233,0.22)'; e.currentTarget.style.color = '#7dd3fc'; }}}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+              <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+            </svg>
+            {switchMode ? 'Exit Import' : 'Code Import'}
+          </button>
+
+          {/* ── DIVIDER (only in normal mode) ── */}
+          {!switchMode && (
+            <div style={{ width: 1, height: 20, background: T.btnBorder, margin: '0 6px', flexShrink: 0, opacity: 0.7 }} />
+          )}
+
+          {/* ── GROUP C: Canvas actions + Primary CTA ────────────── */}
+
+          {/* Hide code panel (shown only when code panel is open) */}
           {showCode && !switchMode && (
             <button
               onClick={() => setShowCode(false)}
-              title="Hide code panel"
-              style={{ background: 'transparent', border: `1px solid ${T.btnBorder}`, borderRadius: 6, color: T.btnText, padding: '5px 8px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
+              title="Close code panel"
+              style={{ background: 'transparent', border: `1px solid ${T.btnBorder}`, borderRadius: 6, color: '#52525b', padding: '5px 7px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0, transition: 'all 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.3)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#52525b'; e.currentTarget.style.borderColor = T.btnBorder; }}
             >
               <XIcon size={9} />
             </button>
           )}
 
-          {/* Clear */}
+          {/* Clear canvas */}
           {!switchMode && (
             <button
               onClick={handleClear}
-              style={{ background: 'transparent', border: `1px solid ${T.btnBorder}`, borderRadius: 6, color: T.btnText, padding: '5px 10px', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+              title="Clear the canvas"
+              style={{ background: 'transparent', border: `1px solid ${T.btnBorder}`, borderRadius: 6, color: T.btnText, padding: '5px 10px', fontSize: 11, cursor: 'pointer', flexShrink: 0, transition: 'all 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.3)'; e.currentTarget.style.background = 'rgba(248,113,113,0.05)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = T.btnText; e.currentTarget.style.borderColor = T.btnBorder; e.currentTarget.style.background = 'transparent'; }}
             >
               Clear
             </button>
           )}
 
-          {/* Generate Code */}
+          {/* Generate — Primary CTA, always last */}
           {!switchMode && (
             <button
+              data-tutorial="generate-btn"
               onClick={handleGenerate}
-              style={{ background: T.genBg, border: 'none', borderRadius: 6, color: T.genTx, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}
+              title="Generate code from your diagram"
+              style={{
+                background: T.genBg, border: 'none', borderRadius: 6,
+                color: T.genTx, padding: '6px 14px', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                flexShrink: 0,
+                boxShadow: switchMode ? 'none' : '0 0 18px rgba(249,115,22,0.4)',
+                transition: 'box-shadow 0.2s, transform 0.1s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 0 26px rgba(249,115,22,0.6)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 0 18px rgba(249,115,22,0.4)'; e.currentTarget.style.transform = 'none'; }}
             >
               <PlayIcon size={10} /> Generate
             </button>
@@ -420,9 +646,11 @@ export default function App() {
 
       {/* Main body */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <Palette diagramType={diagramType} onDragStart={onDragStart} onAdd={addNodeToCanvas} switchMode={switchMode} />
+        <div data-tutorial="palette" style={{ display: 'flex', flexShrink: 0, alignSelf: 'stretch' }}>
+          <Palette diagramType={diagramType} onDragStart={onDragStart} onAdd={addNodeToCanvas} switchMode={switchMode} />
+        </div>
 
-        <div ref={reactFlowWrapper} style={{ flex: 1, position: 'relative' }} onDoubleClick={onWrapperDoubleClick}>
+        <div data-tutorial="canvas" ref={reactFlowWrapper} style={{ flex: 1, position: 'relative' }} onDoubleClick={onWrapperDoubleClick}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -442,20 +670,21 @@ export default function App() {
             snapGrid={[16, 16]}
             defaultEdgeOptions={{
               markerEnd: { type: MarkerType.ArrowClosed },
-              style: { stroke: '#64748b', strokeWidth: 1.5 },
+              style: { stroke: '#3f3f46', strokeWidth: 1.5 },
             }}
           >
             <Controls />
             <MiniMap
               nodeColor={n => {
-                if (n.type === 'classNode') return '#1d4ed8';
-                if (n.type === 'sequenceNode') return '#059669';
-                if (n.type === 'flowNode') return '#d97706';
-                return '#7c3aed';
+                if (n.type === 'classNode') return '#f97316';
+                if (n.type === 'sequenceNode') return '#4ade80';
+                if (n.type === 'flowNode') return '#fb923c';
+                return '#a78bfa';
               }}
-              maskColor="rgba(15,23,42,0.7)"
+              style={{ background: '#050a12', border: '1px solid rgba(255,255,255,0.08)' }}
+              maskColor="rgba(0,0,0,0.7)"
             />
-            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1e293b" />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(255,255,255,0.06)" />
           </ReactFlow>
 
           {switchMode && (
@@ -474,11 +703,25 @@ export default function App() {
           )}
         </div>
 
-        {!switchMode && <PropertiesPanel node={selectedNode} onUpdate={updateNodeData} />}
-        {!switchMode && showCode && <CodeOutput code={generatedCode} diagramType={diagramType} nodes={nodes} edges={edges} />}
+        {!switchMode && (
+          <div data-tutorial="properties-panel" style={{ display: 'flex', flexShrink: 0, alignSelf: 'stretch' }}>
+            <PropertiesPanel node={selectedNode} onUpdate={updateNodeData} />
+          </div>
+        )}
+        {!switchMode && showCode && (
+          <CodeOutput
+            code={generatedCode}
+            diagramType={diagramType}
+            targetLang={currentLang}
+            nodes={nodes}
+            edges={edges}
+            onClose={() => setShowCode(false)}
+          />
+        )}
       </div>
 
       <EdgeModal
+        key={edgeModal.edgeId ?? 'none'}
         visible={edgeModal.visible}
         edgeId={edgeModal.edgeId}
         currentLabel={edgeModal.label}
@@ -505,7 +748,36 @@ export default function App() {
         />
       )}
 
-      {showLanding && <LandingModal onClose={handleDismissLanding} />}
+      {showLanding && (
+        <LandingModal
+          onClose={handleDismissLanding}
+          onSignIn={() => { handleDismissLanding(); setShowAuth(true); }}
+          onStartTutorial={handleStartTutorial}
+        />
+      )}
+
+      {showTutorial && (
+        <TutorialOverlay onClose={() => setShowTutorial(false)} />
+      )}
+
+      {showAuth && (
+        <AuthModal
+          onClose={() => setShowAuth(false)}
+          initialTab="signin"
+        />
+      )}
+
+      {showShare && roomId && (
+        <ShareModal
+          roomId={roomId}
+          peers={peers}
+          isConnected={isConnected}
+          myColor={myColor}
+          myName={displayName}
+          onClose={() => setShowShare(false)}
+          onStopSharing={handleStopSharing}
+        />
+      )}
     </div>
   );
 }
