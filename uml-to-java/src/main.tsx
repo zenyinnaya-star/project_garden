@@ -43,8 +43,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
             whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           }}>
             {this.state.error.message}
-            {'\n\n'}
-            {this.state.error.stack}
+            {import.meta.env.DEV && '\n\n'}
+            {import.meta.env.DEV && this.state.error.stack}
           </pre>
           <button
             onClick={() => window.location.reload()}
@@ -59,7 +59,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
         </div>
       );
     }
-    return this.state.children;
+    return this.props.children;
   }
 }
 
