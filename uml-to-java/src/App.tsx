@@ -232,7 +232,7 @@ export default function App() {
     if (target.closest('.react-flow__node, .react-flow__edge, .react-flow__controls, .react-flow__minimap')) return;
     if (!rfInstance) return;
     const position = rfInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    const defaults: Partial<Record<DiagramType, { nodeType: string; data: object }>> = {
+    const defaults: Partial<Record<DiagramType, { nodeType: string; data: Record<string, unknown> }>> = {
       class:     { nodeType: 'classNode',    data: { label: 'NewClass', type: 'class', fields: [], methods: [] } },
       flowchart: { nodeType: 'flowNode',     data: { label: 'Step', type: 'process' } },
       er:        { nodeType: 'erNode',       data: { label: 'NewTable', attributes: [{ name: 'id', type: 'INT', isPrimary: true }] } },

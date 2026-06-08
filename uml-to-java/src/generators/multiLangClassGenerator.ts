@@ -25,22 +25,6 @@ const PHP  = makeMapper({ int:'int', long:'int', Long:'int', Integer:'int', doub
 const RB   = (_t: string) => _t; // Ruby is dynamic
 const JS   = TS; // same as TS for type hints (JSDoc)
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function _typeMapper(lang: OopLang): (t: string) => string {
-  switch (lang) {
-    case 'python':     return PY;
-    case 'cpp':        return CPP;
-    case 'csharp':     return CS;
-    case 'typescript': return TS;
-    case 'javascript': return JS;
-    case 'kotlin':     return KT;
-    case 'go':         return GO;
-    case 'swift':      return SW;
-    case 'php':        return PHP;
-    case 'ruby':       return RB;
-    default:           return (t) => t; // java passthrough
-  }
-}
 
 // ── Name convention helpers ───────────────────────────────────────────
 const snake = (s: string) => s.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/,'');
