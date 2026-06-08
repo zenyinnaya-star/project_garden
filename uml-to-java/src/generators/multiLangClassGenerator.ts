@@ -22,8 +22,6 @@ const GO   = makeMapper({ int:'int', long:'int64', Long:'int64', Integer:'int', 
 const SW   = makeMapper({ int:'Int', long:'Int64', Long:'Int64', Integer:'Int', double:'Double', float:'Float', boolean:'Bool', Boolean:'Bool', String:'String', string:'String', void:'Void', Object:'Any' }, i => `[${i}]`);
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const PHP  = makeMapper({ int:'int', long:'int', Long:'int', Integer:'int', double:'float', float:'float', boolean:'bool', Boolean:'bool', String:'string', string:'string', void:'void', Object:'mixed' }, (_i) => `array`);
-const RB   = (_t: string) => _t; // Ruby is dynamic
-const JS   = TS; // same as TS for type hints (JSDoc)
 
 
 // ── Name convention helpers ───────────────────────────────────────────
